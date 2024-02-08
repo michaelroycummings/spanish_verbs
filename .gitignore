@@ -1,3 +1,5 @@
 apis.json
+.vscode
 /models
-
+/logs
+download_data.py
