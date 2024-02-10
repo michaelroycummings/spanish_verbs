@@ -15,7 +15,8 @@ def get_model(model_filename: str):
     return fasttext.load_model(model_filename)
 
 def embeddings_no_context(
-    verbs: list[str], embeddings: Dict[str, np.ndarray], model: fasttext.FastText._FastText = None
+    verbs: list[str], embeddings: Dict[str, np.ndarray],
+    model: fasttext.FastText._FastText = None
     ) -> Dict[str, np.ndarray]:
     """
     Gets the word embeddings for a list of words using a Fasttext model.
@@ -24,12 +25,14 @@ def embeddings_no_context(
         verbs (list):
             A list of verbs in infinitive form.
         embeddings (dict):
-            A dictionary where keys are verbs in infinitive form and values are lists of SpaCy embeddings
-            for each instance of the verb in the corpus.
+            A dictionary where keys are verbs in infinitive form and values are
+            lists of SpaCy embeddings for each instance of the verb in the
+            corpus.
 
     Returns:
         returns (dict):
-            A dictionary where keys are verbs in infinitive form and values are SpaCy embeddings.
+            A dictionary where keys are verbs in infinitive form and values are
+            SpaCy embeddings.
     """
     for verb in verbs:
         embeddings[verb] = model.get_word_vector(verb)

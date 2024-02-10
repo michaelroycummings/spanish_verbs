@@ -1,11 +1,11 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple,  Generator
 import requests
 import numpy as np
 from transformers import AutoTokenizer, AutoModel
 import torch
 
 
-def iter_corpus(batch_size: int = 100, offset: int = 0) -> List[str]:
+def iter_corpus(batch_size: int = 100, offset: int = 0) -> Generator:
     """
     Returns an iterable that retrieves a list of sentences
     from the wikipedia's spanish dataset on HuggingFace.
@@ -28,14 +28,19 @@ def iter_corpus(batch_size: int = 100, offset: int = 0) -> List[str]:
             "offset": offset,
             "length": batch_size
         }
-        response = requests.get(base_url, params=params, timeout=5)
-        data = response.json()
-
-        results = [instance["row"]["text"] for instance in data["rows"]]
+        try_count = 0
+        try:
+            try_count += 1
+            response = requests.get(base_url, params=params, timeout=5)
+            data = response.json()
+            results = [instance["row"]["text"] for instance in data["rows"]]
+        except Exception:  # pylint: disable=broad-except
+            if try_count >= 3:
+                raise
+            continue
         yield results
 
         offset += batch_size
-    return
 
 def map_words_to_tokens(
     word_range: Tuple[int, int], offset_mapping: AutoTokenizer) -> List[int]:

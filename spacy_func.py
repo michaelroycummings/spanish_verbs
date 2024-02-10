@@ -1,14 +1,15 @@
 from typing import List, Dict, Tuple
-import spacy
-import numpy as np
 from collections import defaultdict
 import subprocess
+import numpy as np
+import spacy
+
 
 
 def load_model(model_name: str, *args, **kwargs) -> spacy.language.Language:
     """ Loads a SpaCy model, and if it doesn't exist, installs it. """
     try:
-        return spacy.load(model_name, *args, **kwargs)
+        model = spacy.load(model_name, *args, **kwargs)
     except OSError:
         print(f"Installing Spacy model '{model_name}'")
         command = f"python -m spacy download {model_name}"
@@ -16,7 +17,8 @@ def load_model(model_name: str, *args, **kwargs) -> spacy.language.Language:
             command, shell=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, check=True)
     finally:
-        return spacy.load(model_name, *args, **kwargs)
+        model = spacy.load(model_name, *args, **kwargs)
+    return model
 
 
 def get_model(
@@ -70,7 +72,8 @@ def get_lemma_and_pos(
     lemma_and_pos = defaultdict(list)
     start_position = sent[0].idx
     for token in sent:
-        if token.pos_ in ['VERB', 'AUX']:
+        if token.pos_ in ['VERB', 'AUX'] \
+        and token.text.endswith(('ar', 'er', 'ir')):
             lemma_and_pos[token.lemma_].append((
                 token.idx - start_position,
                 token.idx + len(token) - start_position))
