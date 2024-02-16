@@ -7,9 +7,9 @@ import numpy as np
 import spacy
 from transformers import AutoTokenizer, AutoModel
 
-import fasttext_func
-import spacy_func
-import hf_func
+import model_fasttext
+import model_spacy
+import model_huggingface
 
 
 
@@ -103,13 +103,13 @@ class EmbeddingsFromCorpus:
         the models, and so that methods that require the models can be called
         multiple times without loading the models multiple times.
         """
-        self.model_preprocessing_spacy = spacy_func.get_model(
+        self.model_preprocessing_spacy = model_spacy.get_model(
             self.model_name_preprocessing_spacy, task='all')
-        self.model_embeddings_fasttext = fasttext_func.get_model(
+        self.model_embeddings_fasttext = model_fasttext.get_model(
             self.model_name_embeddings_fasttext)
-        self.model_embeddings_spacy_cnn = spacy_func.get_model(
+        self.model_embeddings_spacy_cnn = model_spacy.get_model(
             self.model_name_embeddings_spacy_cnn, task='embedding')
-        self.model_embeddings_spacy_trf = spacy_func.get_model(
+        self.model_embeddings_spacy_trf = model_spacy.get_model(
             self.model_name_embeddings_spacy_trf, task='embedding')
 
         self.tokenizer_embeddings_hf_bert = AutoTokenizer.from_pretrained(
@@ -157,21 +157,21 @@ class EmbeddingsFromCorpus:
         See `corpus_derive_counts_embeddings` for details of the word embedding
         object.
         """
-        embeddings['spacy_cnn'] = spacy_func.embeddings_with_context_cnn(
+        embeddings['spacy_cnn'] = model_spacy.embeddings_with_context_cnn(
             lemma_and_pos, text,
             embeddings['spacy_cnn'],
             self.model_embeddings_spacy_cnn)
-        embeddings['spacy_trf'] = spacy_func.embeddings_with_context_trf(
+        embeddings['spacy_trf'] = model_spacy.embeddings_with_context_trf(
             lemma_and_pos, text,
             embeddings['spacy_trf'],
             self.model_embeddings_spacy_trf)
-        embeddings['bert'] = hf_func.embeddings_with_context(
+        embeddings['bert'] = model_huggingface.embeddings_with_context(
             lemma_and_pos, text,
             embeddings['bert'],
             self.tf_embedding_layers_index,
             self.tokenizer_embeddings_hf_bert,
             self.model_embeddings_hf_bert)
-        embeddings['gpt2'] = hf_func.embeddings_with_context(
+        embeddings['gpt2'] = model_huggingface.embeddings_with_context(
             lemma_and_pos, text,
             embeddings['gpt2'],
             self.tf_embedding_layers_index,
@@ -193,7 +193,7 @@ class EmbeddingsFromCorpus:
         text = sent.text
 
         # Get Position Indexes for each Verb in the Sentence
-        lemma_and_pos = spacy_func.get_lemma_and_pos(sent)
+        lemma_and_pos = model_spacy.get_lemma_and_pos(sent)
         if not lemma_and_pos:
             return
 
@@ -241,7 +241,7 @@ class EmbeddingsFromCorpus:
         """
         # Corpus
         batch_size = 100 # max download size for Hugging Face API is 100
-        self.corpus_iterator = hf_func.iter_corpus(batch_size=batch_size)
+        self.corpus_iterator = model_huggingface.iter_corpus(batch_size=batch_size)
 
         # Models: POS and Lemmatizer, Tokenizers, Word Embedding Models
         if self.model_preprocessing_spacy is None:
@@ -331,21 +331,21 @@ class EmbeddingsFromCorpus:
         verbs = list(self.word_counts.keys())
         embeddings = defaultdict(lambda: defaultdict(list))
 
-        embeddings['fasttext'] = fasttext_func.embeddings_no_context(
+        embeddings['fasttext'] = model_fasttext.embeddings_no_context(
             verbs, embeddings['fasttext'], self.model_embeddings_fasttext)
-        embeddings['spacy_cnn'] = spacy_func.embeddings_no_context(
+        embeddings['spacy_cnn'] = model_spacy.embeddings_no_context(
             verbs, embeddings['spacy_cnn'],
             self.model_name_embeddings_spacy_cnn,
             self.model_embeddings_spacy_cnn)
-        embeddings['spacy_trf'] = spacy_func.embeddings_no_context(
+        embeddings['spacy_trf'] = model_spacy.embeddings_no_context(
             verbs, embeddings['spacy_trf'],
             self.model_name_embeddings_spacy_trf,
             self.model_embeddings_spacy_trf)
-        embeddings['bert'] = hf_func.embeddings_no_context(
+        embeddings['bert'] = model_huggingface.embeddings_no_context(
             verbs, embeddings['bert'], self.tf_embedding_layers_index,
             self.tokenizer_embeddings_hf_bert,
             self.model_embeddings_hf_bert,)
-        embeddings['gpt2'] = hf_func.embeddings_no_context(
+        embeddings['gpt2'] = model_huggingface.embeddings_no_context(
             verbs, embeddings['gpt2'], self.tf_embedding_layers_index,
             self.tokenizer_embeddings_hf_gpt,
             self.model_embeddings_hf_gpt,)

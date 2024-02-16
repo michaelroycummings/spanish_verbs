@@ -37,3 +37,7 @@ def embeddings_no_context(
     for verb in verbs:
         embeddings[verb] = model.get_word_vector(verb)
     return embeddings
+
+if __name__ == "__main__":
+    model = get_model('models/cc.es.300.bin')
+    print(model.get_word_vector('comer').shape)
