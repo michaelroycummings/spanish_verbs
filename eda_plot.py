@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Union
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -36,7 +36,7 @@ def subplot_length_data(
     return ax
 
 
-def plot_vector_lenghts(lengths_context, lengths_contextless):
+def plot_vector_lengths(lengths_context, lengths_contextless):
     """
     Plots the distribution of vector lengths for each model with and without
     context.
@@ -77,6 +77,61 @@ def plot_vector_lenghts(lengths_context, lengths_contextless):
         else:
             ax = subplot_no_data(ax, column_title, row_title, fontsize)
 
+    plt.tight_layout()
+    plt.show()
+
+
+def subplot_embedding_2d(
+    embeddings: List[List[float]],# clusters: List[int],
+    ax: plt.Axes, column_title: str, row_title: str, fontsize: int
+    ):
+    """ Add a subplot of a 2D scatter plot to the figure. """
+    x = embeddings[:, 0]
+    y = embeddings[:, 1]
+    ax.scatter(x, y) #, c=clusters)
+    ax.set_title(column_title, fontsize=fontsize)
+    ax.set_ylabel(row_title, fontsize=fontsize)
+    return ax
+
+
+def plot_embedding_space(
+    embeddings_context: Dict[str, List[List[float]]],
+    embeddings_contextless: Dict[str, List[List[float]]],
+    clusters_context: Dict[str, List[int]],
+    clusters_contextless: Dict[str, List[int]],
+    ):
+    """
+    Plots the 2D embedding space for each model with and without context.
+    """
+    models = ['fasttext', 'spacy_cnn', 'spacy_trf', 'bert', 'gpt2']
+
+    fig, axs = plt.subplots(len(models), 2, figsize=(10, len(models)*3.5))
+    fontsize = 10
+
+    for i, model in enumerate(models):
+
+        # Plot the Left Column of Subplot Grid: With Context
+        ax=axs[i, 0]
+        column_title = "With context"
+        row_title = f"{model}\nidk"
+        if model in embeddings_context:
+            ax = subplot_embedding_2d(
+                embeddings_context[model],# clusters_context[model],
+                ax, column_title, row_title, fontsize)
+        else:
+            ax = subplot_no_data(ax, column_title, row_title, fontsize)
+
+        # Plot the Right Column of Subplot Grid: Without Context
+        ax = axs[i, 1]
+        column_title = "Without context"
+        if model in embeddings_contextless:
+            ax = subplot_embedding_2d(
+                embeddings_contextless[model],# clusters_contextless[model],
+                ax, column_title, row_title, fontsize)
+        else:
+            ax = subplot_no_data(ax, column_title, row_title, fontsize)
+
+    # plt.colorbar()
     plt.tight_layout()
     plt.show()
 
@@ -133,7 +188,8 @@ def plot_nn_distance_distribution(
 
     # Reduce Number of Neighbors to Plot
     if num_neighbors > 0:
-        model_neighbors, neighbor_indices = skip_neighbors(model_neighbors, num_neighbors)
+        model_neighbors, neighbor_indices = skip_neighbors(
+            model_neighbors, num_neighbors)
 
     sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
 
@@ -200,56 +256,41 @@ def plot_nn_distance_distribution(
         # Set x-tick label size and x-label size
         for ax in g.axes.flatten():
             ax.tick_params(axis='x', labelsize=20)
-            ax.set_xlabel("Distance", fontsize=30)
+            ax.set_xlabel("Distance in Embedding Space", fontsize=30)
 
         plt.show()
 
 
-def calc_nn_distance_stats(model_neighbors: dict) -> pd.DataFrame:
+def plot_distance_distribution(
+    distances_to_plot: Dict[str, Dict[str, List[float]]],
+    plot_type: str = 'kde'
+    ):
     """
-    Calculate the mean, median, and standard deviation of the nearest neighbor
-    distances for each model and distance metric.
+    Plots the distribution of distances for each model and distance metric.
+    Difference distances can be given:
+        E.g., distances between uses of the same word.
+        E.g., distances between a word and its lemmatized form.
 
     Parameters:
-        model_neighbors (Dict[str, Dict[str, List[List[int]]]])
-            A dictionary where keys are model names and values are dicts where
-            keys are the type of distance metric and values are lists of the
-            indices of the n nearest neighbors for each embedding in the model.
-
-    Return:
-        pd.DataFrame
-            A DataFrame with the mean, median, and standard deviation of the
-            nearest neighbor distances for each model and distance metric.
-    """
-    stats = []
-    for model_name, values in model_neighbors.items():
-        for distance_name, distances in values.items():
-            distances = np.nan_to_num(np.array(distances))
-            mean = np.mean(distances)
-            median = np.median(distances)
-            std = np.std(distances)
-            stats.append([model_name, distance_name, mean, median, std])
-    return pd.DataFrame(
-        stats, columns=["Model", "Distance Metric", "Mean", "Median", "Std"])
-
-
-def plot_distance_distribution(
-    verb_distances: Dict[str, Dict[str, List[float]]], plot_type: str = 'kde'):
-    """
-    Plots
+        distances_to_plot (Dict[str, Dict[str, List[float]]])
+            A dictionary where keys are model names and values are dictionaries
+            where keys are the type of distance metric and values are lists of
+            distances between words.
+        plot_type (str)
+            The type of plot to create. Must be one of 'kde' or 'hist'.
     """
     color = sns.cubehelix_palette(10, rot=-.25, light=.7)[3]
-    for model_name in verb_distances.keys():
+    for model_name in distances_to_plot.keys():
 
         # Create subplots
-        distance_metrics = verb_distances[model_name].keys()
+        distance_metrics = distances_to_plot[model_name].keys()
         fig, axs = plt.subplots(
             1, len(distance_metrics), figsize=(10, 2))
 
         # Loop over each subplot and plot the data
         for i, distance_metric in enumerate(distance_metrics):
             ax = axs[i]
-            distances = verb_distances[model_name][distance_metric]
+            distances = distances_to_plot[model_name][distance_metric]
 
             # Plot distribution of distances
             if plot_type == 'hist':
@@ -266,7 +307,7 @@ def plot_distance_distribution(
             # Set Titles
             y_label = model_name if i == 0 else ''
             ax.set_ylabel(y_label, fontsize=10)
-            ax.set_xlabel('Distance', fontsize=10)
+            ax.set_xlabel('Distance in Embedding Space', fontsize=10)
             ax.set_title(distance_metric.capitalize(), fontsize=10)
 
             # Make the plot look nicer
@@ -274,55 +315,75 @@ def plot_distance_distribution(
             for spine in ax.spines.values():
                 spine.set_visible(False)
 
+            # Remove y-tick values which are dependent on the distance scale
+            ax.set_yticks([])
+
         plt.tight_layout()
         plt.show()
 
 
 def plot_re_distance_distribution(
-    verb_distances: Dict[str, Dict[str, Dict[str, List[float]]]],
+    re_distances_context: Dict[str, Dict[str, List[float]]],
+    re_distances_contextless: Dict[str, Dict[str, List[float]]],
     plot_type: str = 'kde'):
     """
-    Plots
+    Plots the distribution of distances between verbs and their re counterparts
+    for (1) infinitive verbs without context and (2) verbs in context, for
+    each model and each distance metric.
+
+    Parameters:
+        re_distances_context (Dict[str, Dict[str, List[float]]])
+            A dictionary where keys are model names and values are dictionaries
+            where keys are the type of distance metric and values are lists of
+            distances between embeddings of verbs without context.
+        re_distances_contextless (Dict[str, Dict[str, List[float]]])
+            A dictionary where keys are model names and values are dictionaries
+            where keys are the type of distance metric and values are lists of
+            distances between embeddings of verbs with context.
+        plot_type (str)
+            The type of plot to create. Must be one of 'kde' or 'hist'.
     """
     color_inf = sns.cubehelix_palette(10, rot=-.25, light=.7)[3]
     color_context = sns.color_palette("pastel")[2]
-    for model_name in verb_distances.keys():
+    for model_name in re_distances_context.keys():
 
         # Create subplots
-        distance_metrics = verb_distances[model_name].keys()
+        distance_metrics = re_distances_context[model_name].keys()
         fig, axs = plt.subplots(
             1, len(distance_metrics), figsize=(10, 2))
 
         # Loop over each subplot and plot the data
         for i, distance_metric in enumerate(distance_metrics):
             ax = axs[i]
-            distances_inf = verb_distances[model_name][distance_metric]['inf']
             distances_context = \
-                verb_distances[model_name][distance_metric]['context']
+                re_distances_context[model_name][distance_metric]
+            distances_contextless = \
+                re_distances_contextless[model_name][distance_metric]
+
 
             # Plot distribution of distances
             if plot_type == 'hist':
                 sns.histplot(
-                    distances_inf, bins=30, linewidth=1.5,
-                    ax=ax, color=color_inf, label='inf')
-                sns.histplot(
                     distances_context, bins=30, linewidth=1.5,
                     ax=ax, color=color_context, label='context')
+                sns.histplot(
+                    distances_contextless, bins=30, linewidth=1.5,
+                    ax=ax, color=color_inf, label='contextless')
                 ax.axhline(y=0, linewidth=2, linestyle="-", color=None)
             elif plot_type == 'kde':
                 sns.kdeplot(
-                    distances_inf, bw_adjust=.5, fill=True, alpha=1,
-                    linewidth=1.5, ax=ax, color=color_inf, label='inf')
-                sns.kdeplot(
                     distances_context, bw_adjust=.5, fill=True, alpha=1,
                     linewidth=1.5, ax=ax, color=color_context, label='context')
+                sns.kdeplot(
+                    distances_contextless, bw_adjust=.5, fill=True, alpha=1,
+                    linewidth=1.5, ax=ax, color=color_inf, label='contextless')
             else:
                 raise ValueError('Invalid plot_type argument')
 
             # Set Titles
             y_label = model_name if i == 0 else ''
             ax.set_ylabel(y_label, fontsize=10)
-            ax.set_xlabel('Distance', fontsize=10)
+            ax.set_xlabel('Distance in Embedding Space', fontsize=10)
             ax.set_title(distance_metric.capitalize(), fontsize=10)
 
             # Make the plot look nicer
@@ -330,6 +391,9 @@ def plot_re_distance_distribution(
             ax.tick_params(axis='both', labelsize=8)
             for spine in ax.spines.values():
                 spine.set_visible(False)
+
+            # Remove y-tick values which are dependent on the distance scale
+            ax.set_yticks([])
 
         plt.tight_layout()
         plt.show()

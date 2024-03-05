@@ -3,10 +3,13 @@ import os
 import string
 import pickle
 import numpy as np
+import pandas as pd
 from collections import defaultdict
+from sklearn.mixture import BayesianGaussianMixture
 from annoy import AnnoyIndex
 from sklearn.metrics import pairwise_distances
-
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 
 
 def pickle_save(data, loc):
@@ -215,6 +218,39 @@ def get_cosine_distance(emb_1: List[float], emb_2: List[float]) -> float:
         np.linalg.norm(emb_1) * np.linalg.norm(emb_2))
 
 
+def reduce_embeddings_per_model(
+    embeddings: Dict[str, List[List[float]]]) -> Dict[str, List[List[float]]]:
+    """
+    """
+    reduced_embeddings = {}
+    for model_name, model_embeddings in embeddings.items():
+
+        pca = PCA(n_components=0.99)  # Keep 99% of variance
+        data_pca = pca.fit_transform(model_embeddings)
+
+        tsne = TSNE(n_components=2)  # Reduce to 2 dimensions
+        data_tsne = tsne.fit_transform(data_pca)
+
+        reduced_embeddings[model_name] = data_tsne
+
+    return reduced_embeddings
+
+
+def label_clusters_per_model(
+    embeddings: Dict[str, List[List[float]]]) -> Dict[str, List[List[float]]]:
+    """
+    """
+    clusters_per_model = {}
+    for model_name, model_embeddings in embeddings.items():
+
+        # dirichlet_process gives near-zero weights to unnecessary components
+        cluster_model = BayesianGaussianMixture(
+            n_components=10, # should be larger than max expected number
+            weight_concentration_prior_type='dirichlet_process',
+            random_state=42)
+        cluster_model.fit(model_embeddings)
+
+
 def get_neighbor_indices(
     embeddings: List[List[float]], num_neighbors: int, num_trees: int = 1
     ) -> List[List[int]]:
@@ -359,34 +395,138 @@ def calc_neighbors_per_model(
     return model_neighbors
 
 
-def calc_distances_context_to_context(
-    embeddings_context: Dict[str, Dict[str, List[float]]]
-    ) -> Dict[str, List[List[int]]]:
+def calc_nn_distance_stats(
+    model_neighbors: Dict[str, Dict[str, List[List[int]]]]
+    ) -> pd.DataFrame:
     """
-    For each model, calculates the distances of the n nearest neighbors for each
-    embedding.
+    Calculate the mean, median, and standard deviation of the nearest neighbor
+    distances for each model and distance metric.
 
     Parameters:
-    - embeddings_context:
-        A dictionary where keys are model names and values are dicts where
-        keys are verbs and values are lists of embeddings for each use of the
-        verb in the corpus.
-    # - embeddings_contextless:
-    #     A dictionary where keys are model names and values are dicts where
-    #     keys are verbs and values are the embedding for each verb's infinitive.
-    - num_neighbors:
-        The number of nearest neighbors to calculate.
-    - num_trees:
-        The number of hyperplane splits to make.
-        Larger gives more accurate neighbors estimations at the cost of more
-        greater computational load.
-        See docs for more info: https://github.com/spotify/annoy
-
-    Returns:
-        Dict[str, Dict[str, List[List[int]]]]
+        model_neighbors (Dict[str, Dict[str, List[List[int]]]])
             A dictionary where keys are model names and values are dicts where
             keys are the type of distance metric and values are lists of the
             indices of the n nearest neighbors for each embedding in the model.
+
+    Return:
+        pd.DataFrame
+            A DataFrame with the mean, median, and standard deviation of the
+            nearest neighbor distances for each model and distance metric.
+    """
+    stats = []
+    for model_name, values in model_neighbors.items():
+        for distance_name, distances in values.items():
+            distances = np.nan_to_num(np.array(distances))
+            mean = np.mean(distances)
+            median = np.median(distances)
+            std = np.std(distances)
+            stats.append([model_name, distance_name, mean, median, std])
+    return pd.DataFrame(
+        stats, columns=["Model", "Distance Metric", "Mean", "Median", "Std"])
+
+
+def calc_distance_summary_metric(
+    embeddings: Dict[str, Dict[str, List[float]]], metric: str = 'mean'
+    ) -> Dict[str, Dict[str, List[float]]]:
+    """
+    For each model, calculates the mean or median distance between all pairs of
+    embeddings for each distance metric.
+
+    Parameters:
+        embeddings (Dict[str, Dict[str, List[float]]])
+            A dictionary where keys are model names and values are dicts where
+            keys are verbs and values are lists of embeddings for each use of
+            the verb in the corpus.
+        metric (str)
+            The metric to use for summarizing the distances.
+            Must be 'mean' or 'median'.
+
+    Returns:
+        Dict[str, Dict[str, List[float]]]
+            A dictionary where keys are model names and values are dicts where
+            keys are the type of distance metric and values are the mean or
+            median distance between all pairs of embeddings for each verb in the
+            model.
+    """
+    if metric == 'mean':
+        scale_func = lambda distances: np.mean(distances)
+    elif metric == 'median':
+        scale_func = lambda distances: np.median(distances)
+    else:
+        raise ValueError("metric must be 'mean' or 'median'.")
+
+    scales_dict = defaultdict(dict)
+    for model_name, model_embeddings in embeddings.items():
+
+        model_embeddings = np.concatenate(
+            list(model_embeddings.values()), axis=0)
+
+        for metric in ['euclidean', 'cosine']:
+            distances = pairwise_distances(model_embeddings, metric=metric)
+            i_upper = np.triu_indices(distances.shape[0], 1)
+            distances = distances[i_upper].tolist()
+            scales_dict[model_name][metric] = scale_func(distances)
+
+    return scales_dict
+
+
+def scale_distances(
+    distances: Dict[str, Dict[str, List[float]]],
+    scales: Dict[str, Dict[str, float]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+    """
+    Scales the distances between each pair of embeddings by sum summary
+    distance metric for each model and each distance measurement type
+    (e.g., Euclidean, Cosine).
+
+    Parameters:
+        distances (Dict[str, Dict[str, List[float]]])
+            A dictionary where keys are model names and values are dicts where
+            keys are the type of distance metric and values are lists of the
+            distances between each pair of embeddings for each verb in the
+            corpus.
+        scales (Dict[str, Dict[str, float]])
+            A dictionary where keys are model names and values are dicts where
+            keys are the type of distance metric and values are the mean or
+            median distance between all pairs of embeddings for each verb in the
+            model.
+
+    Returns:
+        Dict[str, Dict[str, List[float]]]
+            A dictionary where keys are model names and values are dicts where
+            keys are the type of distance metric and values are lists of the
+            distances between each pair of embeddings for each verb in the
+            corpus, scaled by the mean or median distance between all pairs of
+            embeddings for each verb in the model.
+    """
+    for model_name in distances.keys():
+        for distance_metric in distances[model_name].keys():
+            distances[model_name][distance_metric] = [
+                distance / scales[model_name][distance_metric] \
+                for distance in distances[model_name][distance_metric]]
+    return distances
+
+
+def calc_distances_context_to_context(
+    embeddings_context: Dict[str, Dict[str, List[float]]]
+    ) -> Dict[str, Dict[str, List[float]]]:
+    """
+    For each model, calculates the distances between each pair of embeddings for
+    each verb in the corpus. Distances are calculated using Euclidean and Cosine
+    metrics.
+
+    Parameters:
+        embeddings_context:
+            A dictionary where keys are model names and values are dicts where
+            keys are verbs and values are lists of embeddings for each use of the
+            verb in the corpus.
+
+    Returns:
+        Dict[str, Dict[str, List[float]]]
+            A dictionary where keys are model names and values are dicts where
+            keys are the type of distance metric and values are lists of the
+            distances between each pair of embeddings for each verb in the
+            corpus.
     """
 
     distances_dict = defaultdict(dict)
@@ -474,45 +614,74 @@ def get_distances_re_verbs(
         verb in the corpus.
     - embeddings_contextless:
         A dictionary where keys are model names and values are dicts where
-        keys are verbs and values are the embedding for each verb's infinitive.
+        keys are verbs and values are the embedding for each verb's infinitive,
+        without context.
 
     Returns
     -------
-    Dict[str, Dict[str, Dict[str, List[float]]]]
-        A dictionary where keys are model names and values are dicts where
-        keys are the type of distance metric and values are dicts where keys are
-        whether the distance is between infinitives or context embeddings, and
-        values are lists of the distances of each embedding of a verb in context
-        to the embedding of the verb's infinitive.
+    tuple(Dict[str, Dict[str, List[float]]], Dict[str, Dict[str, List[float]]])
+        A tuple of two dictionaries, for distances between the with context and
+        without context embeddings of each verb and its re counterpart, if one
+        exists.
+        Each dictionary has keys for the model names and values are dicts where
+        keys are the type of distance metric and values are lists of the
+        distances described above.
     """
-    distances_dict = defaultdict(dict)
     all_verbs = next(iter(embeddings_contextless.values())).keys()
     verbs_with_re = [verb for verb in all_verbs if f"re{verb}" in all_verbs]
+    model_names = embeddings_context.keys()
 
-    for model_name in embeddings_context.keys():
-        euclidean = defaultdict(list)
-        cosine  = defaultdict(list)
+    # # Inf distances
+    # re_distances_inf = defaultdict(dict)
+    # for model_name in embeddings_context.keys():
+    #     euclidean = []
+    #     cosine  = []
+
+    #     for verb in verbs_with_re:
+    #         re_verb = f"re{verb}"
+
+    #         inf_verb = embeddings_contextless[model_name][verb]
+    #         inf_re_verbs = embeddings_contextless[model_name][re_verb]
+    #         euclidean.append(get_euclidean_distance(inf_verb, inf_re_verbs))
+    #         cosine.append(get_cosine_distance(inf_verb, inf_re_verbs))
+
+    #     re_distances_context[model_name]['euclidean'] = euclidean
+    #     re_distances_context[model_name]['cosine'] = cosine
+
+    # Context distances
+    re_distances_context = defaultdict(dict)
+    for model_name in model_names:
+        euclidean = []
+        cosine  = []
 
         for verb in verbs_with_re:
             re_verb = f"re{verb}"
 
-            # Inf distance
-            inf_verb = embeddings_contextless[model_name][verb]
-            inf_re_verbs = embeddings_contextless[model_name][re_verb]
-            euclidean['inf'].append(
-                get_euclidean_distance(inf_verb, inf_re_verbs))
-            cosine['inf'].append(
-                get_cosine_distance(inf_verb, inf_re_verbs))
+            for verb_emb in embeddings_context[model_name][verb]:
+                for re_verb_emb in embeddings_context[model_name][re_verb]:
+                    euclidean.append(
+                        get_euclidean_distance(verb_emb, re_verb_emb))
+                    cosine.append(
+                        get_cosine_distance(verb_emb, re_verb_emb))
 
-            # Context distances
-            for context_verb in embeddings_context[model_name][verb]:
-                for context_re_verb in embeddings_context[model_name][re_verb]:
-                    euclidean['context'].append(
-                        get_euclidean_distance(context_verb, context_re_verb))
-                    cosine['context'].append(
-                        get_cosine_distance(context_verb, context_re_verb))
+        re_distances_context[model_name]['euclidean'] = euclidean
+        re_distances_context[model_name]['cosine'] = cosine
 
-        distances_dict[model_name]['euclidean'] = euclidean
-        distances_dict[model_name]['cosine'] = cosine
+    # Contextless distances
+    re_distances_contextless = defaultdict(dict)
+    for model_name in model_names:
+        euclidean = []
+        cosine  = []
 
-    return distances_dict
+        for verb in verbs_with_re:
+            re_verb = f"re{verb}"
+
+            verb = embeddings_contextless[model_name][verb]
+            re_verb = embeddings_contextless[model_name][re_verb]
+            euclidean.append(get_euclidean_distance(verb, re_verb))
+            cosine.append(get_cosine_distance(verb, re_verb))
+
+        re_distances_contextless[model_name]['euclidean'] = euclidean
+        re_distances_contextless[model_name]['cosine'] = cosine
+
+    return (re_distances_context, re_distances_contextless)
