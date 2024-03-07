@@ -193,15 +193,24 @@ def plot_nn_distance_distribution(
 
     sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
 
+    # Set Specific Order for Graphing - comment out for general use
+    model_names = model_neighbors.keys()
+    model_names = ['fasttext', 'spacy_cnn', 'spacy_trf', 'bert', 'gpt2']
+
     # Each Model gets a FacetGrid where
     # rows are the neighbor number and columns are the distance metric
-    for model_name in model_neighbors.keys():
+    for model_name in model_names:
+
+        # Set Specific Order for Graphing - comment out for general use
+        distance_metrics = model_neighbors[model_name].keys()
+        distance_metrics = ['euclidean', 'cosine']
+
         # Create a DataFrame of all embeddings for a model
         df = []
-        for distance_type in model_neighbors[model_name].keys():
-            temp_df = pd.DataFrame(model_neighbors[model_name][distance_type])
+        for distance_metric in distance_metrics:
+            temp_df = pd.DataFrame(model_neighbors[model_name][distance_metric])
             temp_df = temp_df.melt(var_name="Neighbor", value_name="Distance")
-            temp_df['Metric'] = distance_type.capitalize()
+            temp_df['Metric'] = distance_metric
             df.append(temp_df)
         df = pd.concat(df)
         df["Neighbor"] = df["Neighbor"].apply(lambda x: f"NN {x + 1}        ,")
@@ -250,8 +259,8 @@ def plot_nn_distance_distribution(
             rotation='vertical', fontsize=30)
 
         # Label the Facet Grid columns (i.e., distance metric type)
-        for ax, title in zip(g.axes[0], df["Metric"].unique()):
-            ax.set_title(title, fontsize=30, weight='bold')
+        for ax, title in zip(g.axes[0], distance_metrics):
+            ax.set_title(title.capitalize(), fontsize=30, weight='bold')
 
         # Set x-tick label size and x-label size
         for ax in g.axes.flatten():
@@ -279,11 +288,19 @@ def plot_distance_distribution(
         plot_type (str)
             The type of plot to create. Must be one of 'kde' or 'hist'.
     """
+    # Set Specific Order for Graphing - comment out for general use
+    model_names = distances_to_plot.keys()
+    model_names = ['spacy_cnn', 'spacy_trf', 'bert', 'gpt2']
+
     color = sns.cubehelix_palette(10, rot=-.25, light=.7)[3]
-    for model_name in distances_to_plot.keys():
+
+    for model_name in model_names:
+
+        # Set Specific Order for Graphing - comment out for general use
+        distance_metrics = distances_to_plot[model_name].keys()
+        distance_metrics = ['euclidean', 'cosine']
 
         # Create subplots
-        distance_metrics = distances_to_plot[model_name].keys()
         fig, axs = plt.subplots(
             1, len(distance_metrics), figsize=(10, 2))
 
@@ -343,12 +360,20 @@ def plot_re_distance_distribution(
         plot_type (str)
             The type of plot to create. Must be one of 'kde' or 'hist'.
     """
+    # Set Specific Order for Graphing - comment out for general use
+    model_names = re_distances_context.keys()
+    model_names = ['spacy_cnn', 'spacy_trf', 'bert', 'gpt2']
+
     color_inf = sns.cubehelix_palette(10, rot=-.25, light=.7)[3]
     color_context = sns.color_palette("pastel")[2]
-    for model_name in re_distances_context.keys():
+
+    for model_name in model_names:
+
+        # Set Specific Order for Graphing - comment out for general use
+        distance_metrics = re_distances_context[model_name].keys()
+        distance_metrics = ['euclidean', 'cosine']
 
         # Create subplots
-        distance_metrics = re_distances_context[model_name].keys()
         fig, axs = plt.subplots(
             1, len(distance_metrics), figsize=(10, 2))
 
@@ -364,18 +389,18 @@ def plot_re_distance_distribution(
             # Plot distribution of distances
             if plot_type == 'hist':
                 sns.histplot(
-                    distances_context, bins=30, linewidth=1.5,
+                    distances_context, bins=30, linewidth=1.5, alpha=0.5,
                     ax=ax, color=color_context, label='context')
                 sns.histplot(
-                    distances_contextless, bins=30, linewidth=1.5,
+                    distances_contextless, bins=30, linewidth=1.5, alpha=0.5,
                     ax=ax, color=color_inf, label='contextless')
                 ax.axhline(y=0, linewidth=2, linestyle="-", color=None)
             elif plot_type == 'kde':
                 sns.kdeplot(
-                    distances_context, bw_adjust=.5, fill=True, alpha=1,
+                    distances_context, bw_adjust=.5, fill=True, alpha=0.5,
                     linewidth=1.5, ax=ax, color=color_context, label='context')
                 sns.kdeplot(
-                    distances_contextless, bw_adjust=.5, fill=True, alpha=1,
+                    distances_contextless, bw_adjust=.5, fill=True, alpha=0.5,
                     linewidth=1.5, ax=ax, color=color_inf, label='contextless')
             else:
                 raise ValueError('Invalid plot_type argument')
@@ -387,7 +412,8 @@ def plot_re_distance_distribution(
             ax.set_title(distance_metric.capitalize(), fontsize=10)
 
             # Make the plot look nicer
-            ax.legend()
+            legend = ax.legend(fontsize=8.5)
+            legend.get_frame().set_facecolor('white')
             ax.tick_params(axis='both', labelsize=8)
             for spine in ax.spines.values():
                 spine.set_visible(False)
