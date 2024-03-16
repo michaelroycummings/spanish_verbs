@@ -1,11 +1,14 @@
 # spanish_verbs
 
+<br>
+
 ## Project Aim
 
-As my first project after a year of self studying a Master's in Data Science, this project aims to solidify relevant theory and practice relevant application techniques in the field of NLP. Although the main question is simple, the project intends to branch into side ideas to practice and iron out the application kinks in as many relevant topics as possible in the alloted time.
+As part of my Master's in Data Science, this project aims to solidify relevant theory and practice relevant application techniques in the field of NLP.
 
-This project starts with a very simple idea: in English, verbs that start with "re", that also have a non-re counterpart (e.g., redo and do) mean "to do the verb again". As I've been learning Spanish over the past few months, I've noticed verbs that do and do not follow this rule, so the project aims to use the embedding space of pre-trained language models to explore the adherence of Spanish verbs to this rule.
+We explore the architectures and embedding spaces of popular word embedding models, while getting familiar with popular NLP libraries, via a simple question: in English, verbs that start with "re", that also have a non-re counterpart (e.g., redo and do) mean "to do the verb again". As I've been learning Spanish over the past year, I've noticed verbs that do and do not follow this rule, so the project aims to use the embedding space of pre-trained language models to explore the adherence of Spanish verbs to this rule.
 
+<br>
 
 ## Project Summary
 
